@@ -18,7 +18,7 @@ class QueryProvider:
             --최근구매전집구분및일자(전집데이터)
             MAX(count) AS total_series_count--전집보유수량
         FROM 
-            wjdm.wjdm.dim_crm_cust_series_ord_hst_all
+            crm_cust_series_ord_hst_all
         WHERE
             TO_DATE(prf_ymd, 'YYYYMMDD') >= DATEADD('year', -2, CURRENT_DATE) -- 현재날자로부터 2년치 데이터 가져옴
         GROUP BY 
@@ -34,7 +34,7 @@ class QueryProvider:
                 stnd_mt,
                 ROW_NUMBER() OVER (PARTITION BY prnts_cstmr_id ORDER BY stnd_mt DESC) AS rn
             FROM 
-                wjdm.FACT_CRM_REMAIN_POINT
+                CRM_REMAIN_POINT
         )
         SELECT 
             prnts_cstmr_id,
@@ -54,7 +54,7 @@ class QueryProvider:
                     WHEN menu_params LIKE 'prdMstCd=%' THEN SUBSTRING(REGEXP_EXTRACT(menu_params, 'prdMstCd=([^&]+)'), 10)
                     ELSE NULL 
                 END AS v
-            FROM com_maria_bookclub20.tb_lounge2_menu_history_renewal
+            FROM lounge2_menu_history_renewal
         ),
         joined_data AS (
             SELECT 
@@ -80,7 +80,7 @@ class QueryProvider:
                     c.mem_sap_code, -- 멤버십SAP코드
                     c.subscriber_type, -- 멤버십 조직구분
                     c.mem_status -- 회원상태
-                FROM com_maria_bookclub20.tb_unity_parent_contract AS c -- 통합>계약
+                FROM unity_parent_contract AS c -- 통합>계약
                 LEFT JOIN com_maria_bookclub20.tb_unity_parent AS p -- 통합>부모
                     ON c.parent_number = p.parent_number
             ) AS p
@@ -151,11 +151,11 @@ class QueryProvider:
           sum(case when b.cnts_rlm_nm in ('문화예술') then 1 else 0 end) /   --문화예술 카운트
           count(distinct a.stnd_ymd) as culture_art
         FROM
-          com_maria_bookclub.tb_rms_entity AS a
+          tb_rms_entity AS a
         LEFT JOIN 
-          dwp_dm_bookclub.dim_cnts AS b ON a.book_code = b.book_cd
+          dim_cnts AS b ON a.book_code = b.book_cd
         LEFT JOIN 
-          com_maria_bookclub20.tb_member as c ON a.member_code  = c.member_code 
+          tb_member as c ON a.member_code  = c.member_code 
         WHERE 
            a.stnd_ymd between '2023-02-12' AND '2024-08-12'
            and a.rms_action IN ('RMS_EB_RA', 'RMS_EB_RE', 'RMS_MO_DVS', 'RMS_MO_RE')
@@ -166,87 +166,6 @@ class QueryProvider:
           ;
         '''
 
-
-        # self.athena_qry_customer_id_info = '''
-        # SELECT A.CNTRT_MNGT_TCHR_ENO AS tchr_eno,
-        #        I.EMP_FNM AS tchr_nm,
-        #        A.PRNTS_CSTMR_ID AS prnts_cstmr_id,
-        #        B.CSTMR_FNM AS prnts_cstmr_fnm,
-        #        A.CHLDN_CSTMR_ID AS chldn_cstmr_id,
-        #        C.CSTMR_FNM AS chldn_cstmr_fnm,
-        #        bookclub.member_code
-        # FROM (
-        #          SELECT O.*, P.TCHR_ENO
-        #          FROM com_maria_wjtblep.CO02001M O /* 계약 기본 */
-        #          LEFT OUTER JOIN com_maria_wjtblep.CO22001M P
-        #              ON O.CNTRT_ID = P.CNTRT_ID
-        #          WHERE 1=1  /* 계약일 기준 필터링 조건 제거 */
-        #            AND O.CNTRT_STS_CD = '1'
-        #            AND O.BSNS_ORGN_SCN_CD = '2000'
-        #            AND O.BSNS_DOC_TY_CD IN ('ZM21', 'ZM22', 'ZM23', 'ZPMB', 'ZC25', 'ZO01', 'ZO07')
-        #            AND COALESCE(O.CHLDN_CSTMR_ID, '') <> ''
-        #            AND COALESCE(O.CNTRT_MNGT_TCHR_ENO, '') <> ''
-        #      ) A
-        # LEFT OUTER JOIN (SELECT * FROM com_maria_wjtblep.CU01001M_N) B
-        #     ON A.PRNTS_CSTMR_ID = B.CSTMR_ID
-        # LEFT OUTER JOIN (SELECT * FROM com_maria_wjtblep.CU01001M_N) C
-        #     ON A.CHLDN_CSTMR_ID = C.CSTMR_ID
-        # LEFT OUTER JOIN com_maria_wjtblep.HR01001M D /* 사원기본_관리BC */
-        #     ON A.CNTRT_MNGT_TCHR_ENO = D.ENO
-        # LEFT OUTER JOIN (
-        #          SELECT * FROM com_maria_wjtblep.HR01002H
-        #          WHERE ACNTG_YEAR = CAST(YEAR(current_date) AS VARCHAR)
-        #            AND ACNTG_MT = LPAD(CAST(MONTH(current_date) AS VARCHAR), 2, '0')
-        #      ) E /* 사원교사이력 - 현재 재직중인 교사 */
-        #     ON E.ENO = D.ENO
-        # LEFT OUTER JOIN com_maria_wjtblep.HR21005H F /* 인사조직구조이력 */
-        #     ON E.ORGN_CD = F.ORGN_CD
-        #     AND E.ACNTG_YEAR = F.ACNTG_YEAR
-        #     AND E.ACNTG_MT = F.ACNTG_MT
-        # LEFT OUTER JOIN (
-        #         /* 인사조직이력 */
-        #         SELECT G1.ORGN_CD, G1.ORGN_NM, G1.BGN_YMD, G1.END_YMD
-        #         FROM (
-        #                  SELECT ORGN_CD, ORGN_NM, BGN_YMD, END_YMD, ROW_NUMBER() OVER (PARTITION BY ORGN_CD ORDER BY END_YMD DESC) AS SEQ
-        #                  FROM com_maria_wjtblep.HR21001H
-        #              ) G1
-        #         WHERE G1.SEQ = 1
-        #     ) G
-        #     ON F.UP1_BSNS_ORGN_CD = G.ORGN_CD
-        # LEFT OUTER JOIN (
-        #         /* 인사조직이력 */
-        #         SELECT H1.ORGN_CD, H1.ORGN_NM, H1.BGN_YMD, H1.END_YMD
-        #         FROM (
-        #                  SELECT ORGN_CD, ORGN_NM, BGN_YMD, END_YMD, ROW_NUMBER() OVER (PARTITION BY ORGN_CD ORDER BY END_YMD DESC) AS SEQ
-        #                  FROM com_maria_wjtblep.HR21001H
-        #              ) H1
-        #         WHERE H1.SEQ = 1
-        #     ) H
-        #     ON F.UP4_BSNS_ORGN_CD = H.ORGN_CD
-        # /* 사원 교사 이력 */
-        # LEFT OUTER JOIN (
-        #         /* 사원교사이력 */
-        #         SELECT I1.ENO, I1.EMP_FNM
-        #         FROM (
-        #                  SELECT ENO, EMP_FNM, ROW_NUMBER() OVER (PARTITION BY ENO ORDER BY LAST_UPDT_DT DESC) AS SEQ
-        #                  FROM com_maria_wjtblep.HR01002H
-        #              ) I1
-        #         WHERE I1.SEQ = 1
-        #     ) I
-        #     ON A.CNTRT_MNGT_TCHR_ENO = I.ENO
-        # LEFT JOIN com_maria_bookclub20.tb_member AS bookclub
-        #     ON bookclub.parent_customer_number = A.prnts_cstmr_id
-        #     AND bookclub.customer_number = A.chldn_cstmr_id
-        # WHERE COALESCE(F.UP1_BSNS_ORGN_CD, '') <> ''
-        #   AND COALESCE(F.BSPLE_CD, '') <> ''
-        #   AND F.UP1_BSNS_ORGN_CD NOT IN ('51476530')
-        #   AND B.SFKY <> D.SFKY /* 같은 경우 부모와 관리교사가 동일한 케이스 */
-        #   AND COALESCE(B.CSTMR_FNM, '') NOT IN ('', '휴면고객') /* 휴면고객 제외 */
-        #   AND COALESCE(C.CSTMR_FNM, '') NOT IN ('', '휴면고객') /* 휴면고객 제외 */
-        # GROUP BY A.CNTRT_MNGT_TCHR_ENO, I.EMP_FNM, A.PRNTS_CSTMR_ID, B.CSTMR_FNM, CHLDN_CSTMR_ID, C.CSTMR_FNM, bookclub.member_code, B.SFKY, D.SFKY
-        # ORDER BY A.CNTRT_MNGT_TCHR_ENO, I.EMP_FNM, A.PRNTS_CSTMR_ID, B.CSTMR_FNM, CHLDN_CSTMR_ID, C.CSTMR_FNM, bookclub.member_code
-        # limit 1;
-        # '''
 
         self.athena_qry_prnts_age_info = '''
         WITH LatestCustomerInfo AS (
@@ -265,9 +184,9 @@ class QueryProvider:
                 cu01001m.last_updt_dt,
                 ROW_NUMBER() OVER (PARTITION BY cu01001m.cstmr_id ORDER BY cu01001m.last_updt_dt DESC) AS rn
             FROM 
-                com_maria_wjtblep.cu01001m AS cu01001m  -- 고객 테이블
+               cu01001m AS cu01001m  -- 고객 테이블
             LEFT JOIN 
-                com_maria_wjtblep.co02001m AS cntrt  -- 계약 테이블
+                .co02001m AS cntrt  -- 계약 테이블
             ON 
                 cntrt.prnts_cstmr_id = cu01001m.cstmr_id
             WHERE 
